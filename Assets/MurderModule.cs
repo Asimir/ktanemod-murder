@@ -1,7 +1,9 @@
 ﻿using UnityEngine;
 using Newtonsoft.Json;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 public class MurderModule : MonoBehaviour
 {
@@ -21,6 +23,9 @@ public class MurderModule : MonoBehaviour
 	int suspects = 6;
 	int weapons = 6;
 	int bodyFound;
+    string[] commands = new string[3] { "it was", "with the", "in the" };
+    string[] nameTypes = new string[3] { "people", "weapons", "rooms" };
+    string TwitchHelpMessage = "Cycle the options with !{0} cycle or !{0} cycle people (also weapons and rooms). Make an accusation with !{0} It was Peacock, with the candlestick, in the kitchen. Or you can set the options individually, and accuse with !{0} accuse.";
 
 	Color[] colours = {
 		new Color (1f, 0.05f, 0.05f),
@@ -287,4 +292,87 @@ public class MurderModule : MonoBehaviour
 			}
 		}
 	}
+
+    IEnumerable CycleThroughCategory(int index, string search = null)
+    {
+        int length = (index == 2) ? 9 : 4;
+        float delay = (search != null) ? 0.05f : 1.0f;
+        KMSelectable button = buttons[(index * 2) + 1];
+        for (int i = 0; i < length; i++)
+        {
+            if ( (search != null) &&
+                (Display[index].text.ToLowerInvariant().EndsWith(search)) )
+            {
+                yield return true;
+                break;
+            }
+            yield return button;
+            yield return new WaitForSeconds(delay);
+            yield return button;
+        }
+    }
+
+    IEnumerator ProcessTwitchCommand(string input)
+    {
+        input = input.ToLowerInvariant();
+
+        if (input.Equals("accuse"))
+        {
+            yield return buttons[6];
+            yield return null;
+            yield return buttons[6];
+            yield break;
+        }
+        else if (input.StartsWith("cycle"))
+        {
+            bool cycleAll = (input.Equals("cycle"));
+            for (int i = 0; i < 3; i++)
+            {
+                if ( (cycleAll) || (input.EndsWith(nameTypes[i])) )
+                {
+                    yield return new WaitForSeconds(1.0f);
+                    foreach (var item in CycleThroughCategory(i))
+                    {
+                        yield return item;
+                    }
+                }
+            }
+            yield break;
+        }
+
+        string category, value;
+        int catIndex;
+        bool[] set = new bool[3] { false, false, false };
+
+        foreach (Match match in Regex.Matches(input, @"(" + string.Join("|", commands) + ") ([a-z ]+)"))
+        {
+            category = match.Groups[1].ToString();
+            value = match.Groups[2].ToString().Trim();
+
+            catIndex = System.Array.IndexOf(commands, category);
+            if ( (catIndex == -1) || (set[catIndex]) )
+            {
+                continue;
+            }
+
+            foreach (var item in CycleThroughCategory(catIndex, value))
+            {
+                if ( (item is bool) && ((bool)item) )
+                {
+                    set[catIndex] = true;
+                }
+                else
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        if ((set[0]) && (set[1]) && (set[2]))
+        {
+            yield return buttons[6];
+            yield return null;
+            yield return buttons[6];
+        }
+    }
 }
